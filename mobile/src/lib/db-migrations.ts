@@ -175,6 +175,22 @@ export async function runDatabaseMigrations(client: Client) {
     }
   }
 
+  // Baris konfigurasi email bawaan.
+  //
+  // Jalur Rust menyeednya di `turso.rs::ensure_schema`; tanpa baris yang sama di
+  // sini, database yang di-provisioning dari Web tidak punya baris itu sama
+  // sekali — dua jalur provisioning menghasilkan isi yang berbeda, persis kelas
+  // kesalahan yang dijaga `audit:contract`. `is_active = 0` disengaja: email
+  // baru menyala setelah Superadmin mengisinya, dan sampai saat itu pemulihan
+  // password memakai jalur persetujuan di aplikasi.
+  await client.execute({
+    sql: `INSERT OR IGNORE INTO app_mail_config (
+            id, provider, api_key, sender_email, sender_name,
+            reset_base_url, is_active, updated_at, updated_by
+          ) VALUES ('default', 'resend', NULL, NULL, NULL, NULL, 0, ?, 'migration');`,
+    args: [new Date().toISOString()],
+  });
+
   await client.execute({
     sql: `INSERT OR IGNORE INTO schema_migration (version, name, applied_at)
           VALUES (2, 'password-reset-and-two-factor', ?);`,

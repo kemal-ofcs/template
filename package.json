@@ -5,9 +5,10 @@
     "setup": "bun install --cwd web-desktop && bun install --cwd mobile",
     "audit:schema": "bun scripts/schema-audit.ts",
     "audit:contract": "bun scripts/audit-sync-contract.ts",
+    "audit:docs": "bun scripts/audit-docs.ts",
     "sync:mobile": "cd mobile && bun scripts/sync-frontend-lib.ts && bun scripts/sync-rust-modules.ts",
-    "check:quick": "bun scripts/schema-audit.ts && bun scripts/audit-sync-contract.ts && cd web-desktop && bun run check:quick && cd ../mobile && bun run check:quick",
-    "check": "bun scripts/schema-audit.ts && bun scripts/audit-sync-contract.ts && cd web-desktop && bun run check && cd ../mobile && bun run check",
+    "check:quick": "bun scripts/schema-audit.ts && bun scripts/audit-sync-contract.ts && bun scripts/audit-docs.ts && cd web-desktop && bun run check:quick && cd ../mobile && bun run check:quick",
+    "check": "bun scripts/schema-audit.ts && bun scripts/audit-sync-contract.ts && bun scripts/audit-docs.ts && cd web-desktop && bun run check && cd ../mobile && bun run check",
     "rename": "bun scripts/rename-project.ts",
     "verify:identity": "bun scripts/verify-identity.ts",
     "verify:template": "bun scripts/verify-template.ts"

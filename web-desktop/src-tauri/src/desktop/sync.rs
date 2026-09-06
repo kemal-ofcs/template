@@ -1408,6 +1408,9 @@ pub fn status(state: &DesktopState) -> Result<DesktopSyncStatus, CommandError> {
         }),
         push_error: None,
         changed_rows: 0,
+        local_mode: state
+            .turso_config()
+            .is_some_and(|config| config.provider.is_local_file()),
     })
 }
 
@@ -1562,7 +1565,61 @@ pub fn clear_failed(state: &DesktopState, event_id: Option<&str>) -> Result<(), 
 
 #[cfg(test)]
 mod tests {
-    use super::{CANONICAL_SYNC_ROUTES, SNAPSHOT_TABLES};
+    use std::sync::{Mutex, RwLock};
+
+    use reqwest::Client;
+    use tempfile::tempdir;
+
+    use super::{storage, DesktopState, CANONICAL_SYNC_ROUTES, SNAPSHOT_TABLES};
+
+    /// `AutoSyncRunner` memakai bendera ini untuk memutuskan apakah
+    /// `navigator.onLine === false` boleh dipakai sebagai alasan melewatkan
+    /// siklus. Salah di sini berarti perangkat Mode Database Lokal yang
+    /// benar-benar terputus berhenti menguras outbox, berkas hub tertinggal,
+    /// lalu ekspor cadangan dan promosi ke cloud kehilangan data tanpa satu pun
+    /// pesan error.
+    #[test]
+    fn status_menandai_mode_lokal_hanya_untuk_provider_local_file() {
+        let directory = tempdir().expect("direktori sementara");
+        storage::initialize(directory.path()).expect("skema lokal");
+        let state = DesktopState {
+            server_origin: RwLock::new(
+                crate::desktop::app_identity::DEFAULT_SERVER_ORIGIN.to_owned(),
+            ),
+            offline_max_age_hours: 24,
+            data_dir: directory.path().to_path_buf(),
+            http: Client::new(),
+            turso_config: RwLock::new(None),
+            session: Mutex::new(None),
+            vault_lock: Mutex::new(()),
+        };
+
+        // Belum dikonfigurasi: bukan mode lokal.
+        assert!(!super::status(&state).expect("status").local_mode);
+
+        for (provider, harapan) in [
+            (crate::desktop::turso::DatabaseProvider::Turso, false),
+            (crate::desktop::turso::DatabaseProvider::SelfHosted, false),
+            (crate::desktop::turso::DatabaseProvider::LocalFile, true),
+        ] {
+            *state.turso_config.write().expect("kunci config") =
+                Some(crate::desktop::turso::TursoConfig::new(
+                    if provider.is_local_file() {
+                        "C:/data/app-hub.db".to_string()
+                    } else {
+                        "https://contoh.turso.io".to_string()
+                    },
+                    "token".to_string(),
+                    provider,
+                    false,
+                ));
+            assert_eq!(
+                super::status(&state).expect("status").local_mode,
+                harapan,
+                "provider {provider:?} salah ditandai"
+            );
+        }
+    }
 
     #[test]
     fn setiap_domain_snapshot_punya_route_kanonik() {

@@ -88,6 +88,12 @@ const GATES: readonly Gate[] = [
 			"Route kanonik, tabel snapshot, permission, atau pendaftaran command tidak konsisten antar-workspace.",
 	},
 	{
+		name: "Audit penyimpangan dokumen",
+		cmd: ["bun", "scripts/audit-docs.ts"],
+		meaning:
+			"Dokumen mengklaim angka atau daftar yang tidak lagi cocok dengan kode, atau merujuk berkas yang sudah tidak ada. Dokumen yang bertentangan dengan kode menuntun orang berikutnya mengulang bug yang sudah diperbaiki.",
+	},
+	{
 		name: "web-desktop: lint + typecheck + test",
 		cmd: ["bun", "run", "check:quick"],
 		cwd: "web-desktop",

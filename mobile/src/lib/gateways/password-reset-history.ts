@@ -135,19 +135,15 @@ export interface ResetApprovalResult {
 export async function approvePasswordReset(
   requestId: string,
 ): Promise<ResetApprovalResult> {
-  if (!isDesktopRuntime()) {
-    // Sisi Web memiliki implementasi alur pemulihannya sendiri dan selalu
-    // memakai jalur email — ia berjalan di server yang menurut definisi punya
-    // jaringan. Melemparkan pesan yang jelas jauh lebih baik daripada memanggil
-    // endpoint yang belum ada dan memunculkan kegagalan yang membingungkan.
-    throw new Error(
-      "Persetujuan pemulihan di aplikasi baru tersedia pada Desktop dan Mobile. Pada Web, tautan pemulihan dikirim lewat email.",
-    );
-  }
-  const response = await invokeDesktop<JsonRecord>(
-    "desktop_password_reset_approve",
-    { requestId },
-  );
+  const response = isDesktopRuntime()
+    ? await invokeDesktop<JsonRecord>("desktop_password_reset_approve", {
+        requestId,
+      })
+    : ((await requestWebApi<JsonRecord>(
+        "/api/password-reset/history/approve",
+        "POST",
+        { requestId },
+      )) as JsonRecord);
   return {
     token: text(response.token),
     berlakuMenit: Number(response.berlakuMenit ?? 30),
@@ -164,11 +160,11 @@ export async function approvePasswordReset(
  * yang tidak punya jaringan.
  */
 export async function getPasswordResetRoute(): Promise<"email" | "in_app"> {
-  if (!isDesktopRuntime()) return "email";
-  const response = await invokeDesktop<JsonRecord>(
-    "desktop_password_reset_route",
-    {},
-  );
+  const response = isDesktopRuntime()
+    ? await invokeDesktop<JsonRecord>("desktop_password_reset_route", {})
+    : ((await requestWebApi<JsonRecord>("/api/password-reset", "POST", {
+        step: "route",
+      })) as JsonRecord);
   return text(response.route) === "email" ? "email" : "in_app";
 }
 

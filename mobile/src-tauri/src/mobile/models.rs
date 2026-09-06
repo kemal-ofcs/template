@@ -105,6 +105,20 @@ pub struct MobileSyncStatus {
     /// Nol berarti data lokal sudah identik dengan cloud, sehingga UI tidak
     /// perlu memuat ulang apa pun.
     pub changed_rows: i64,
+    /// Perangkat ini memakai Mode Database Lokal (`local_file`).
+    ///
+    /// Dibawa di sini, bukan lewat `desktop_get_database_config`, karena
+    /// perintah itu menuntut `settings.view` + Superadmin sementara siklus
+    /// sinkronisasi otomatis berjalan untuk SETIAP peran.
+    ///
+    /// Pemakainya: `AutoSyncRunner` melewatkan siklus ketika peramban melapor
+    /// `navigator.onLine === false`. Penjagaan itu benar untuk mode cloud, tetapi
+    /// SALAH di mode lokal — di sana push adalah operasi berkas, bukan jaringan,
+    /// dan mesin yang benar-benar terputus justru kasus penggunaan utamanya.
+    /// Tanpa bendera ini outbox tidak pernah terkuras, berkas hub tertinggal,
+    /// lalu ekspor cadangan dan promosi ke cloud — keduanya membaca hub —
+    /// kehilangan data tanpa satu pun pesan error.
+    pub local_mode: bool,
 }
 
 #[derive(Clone, Debug, Serialize)]

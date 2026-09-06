@@ -84,19 +84,21 @@ export async function recoverWithCode(input: {
   code: string;
   newPassword: string;
 }): Promise<{ namaOperator: string; sisaKode: number }> {
-  if (!isDesktopRuntime()) {
-    throw new Error(
-      "Pemulihan dengan kode cetak tersedia pada aplikasi Desktop dan Mobile. Pada Web, gunakan tautan pemulihan yang dikirim lewat email.",
-    );
-  }
-  const response = await invokeDesktop<Record<string, unknown>>(
-    "desktop_password_recovery_with_code",
-    {
-      identifier: input.identifier.trim(),
-      code: input.code.trim(),
-      newPassword: input.newPassword,
-    },
-  );
+  const payload = {
+    identifier: input.identifier.trim(),
+    code: input.code.trim(),
+    newPassword: input.newPassword,
+  };
+  const response = isDesktopRuntime()
+    ? await invokeDesktop<Record<string, unknown>>(
+        "desktop_password_recovery_with_code",
+        payload,
+      )
+    : await requestWebApi<Record<string, unknown>>(
+        "/api/password-reset",
+        "POST",
+        { step: "recover-with-code", ...payload },
+      );
   return {
     namaOperator: String(response.namaOperator ?? ""),
     sisaKode: Number(response.sisaKode ?? 0),

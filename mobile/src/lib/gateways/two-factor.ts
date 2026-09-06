@@ -67,15 +67,14 @@ export async function getTwoFactorStatus() {
  * Hasilnya hanya bisa dibaca sekali — database memegang hash-nya saja.
  */
 export async function issueRecoveryCodes(): Promise<string[]> {
-  if (!isDesktopRuntime()) {
-    throw new Error(
-      "Kode pemulihan password tersedia pada aplikasi Desktop dan Mobile.",
-    );
-  }
-  const response = await invokeDesktop<{ codes?: unknown }>(
-    "desktop_issue_recovery_codes",
-    {},
-  );
+  const response = isDesktopRuntime()
+    ? await invokeDesktop<{ codes?: unknown }>(
+        "desktop_issue_recovery_codes",
+        {},
+      )
+    : await requestWebApi<{ codes?: unknown }>("/api/auth/two-factor", "POST", {
+        step: "recovery-codes",
+      });
   return Array.isArray(response.codes)
     ? response.codes.map((code) => String(code))
     : [];

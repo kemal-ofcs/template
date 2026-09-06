@@ -9,8 +9,9 @@ Yang sudah jadi dan tidak perlu Anda bangun ulang:
 - **Provisioning database sekali-pakai** — layar yang memeriksa database dulu,
   lalu membuat Superadmin pertama dalam satu transaksi atomik. Tanpa akun bawaan,
   tanpa password default.
-- **Dua provider database** — Turso Cloud, atau server libSQL milik Anda sendiri
-  (`sqld`) di komputer kantor, NAS, atau VPS.
+- **Tiga provider database** — Turso Cloud, server libSQL milik Anda sendiri
+  (`sqld`) di komputer kantor/NAS/VPS, atau **Mode Database Lokal**: berkas
+  SQLite di perangkat itu sendiri, tanpa server dan tanpa internet.
 - **Vault kredensial terenkripsi** — AES-256-GCM dengan kunci turunan Argon2id,
   terikat ke perangkat. Auth Token tidak pernah tersimpan sebagai teks biasa dan
   tidak pernah dikirim balik ke frontend.
@@ -98,13 +99,26 @@ bun run sync:mobile
 
 ---
 
-## 3. Dua provider database
+## 3. Tiga provider database
 
-| | Turso Cloud | Server Database Sendiri |
-| :-- | :-- | :-- |
-| Alamat | `libsql://nama-db.turso.io` | `http://192.168.1.10:8080` atau `https://db.kantor-anda.com` |
-| Transport | Selalu HTTPS | HTTP polos boleh untuk alamat jaringan privat |
-| Auth Token | Selalu wajib | Opsional bila server tanpa autentikasi |
+| | Turso Cloud (`turso`) | Server Sendiri (`self_hosted`) | Mode Lokal (`local_file`) |
+| :-- | :-- | :-- | :-- |
+| Alamat | `libsql://nama-db.turso.io` | `http://192.168.1.10:8080` atau `https://db.kantor-anda.com` | path berkas di perangkat |
+| Transport | Selalu HTTPS | HTTP polos boleh untuk alamat jaringan privat | `LocalTransport` (rusqlite), tanpa jaringan |
+| Auth Token | Selalu wajib | Opsional bila server tanpa autentikasi | Tidak pernah ada |
+
+### Mode Database Lokal
+
+Yang ditukar hanya **transport**-nya, SQL-nya tidak: `ensure_schema()` yang sama
+membangun database cloud maupun berkas lokal, sehingga perbedaan skema antara
+keduanya mustahil secara struktural.
+
+Perangkat memegang **dua berkas terpisah** — database operasional beserta
+outbox-nya, dan berkas *hub* yang berperan sebagai "cloud". Mutasi lokal hanya
+menyentuh yang pertama; hub baru terisi lewat `push_outbox`. Karena ekspor
+cadangan dan promosi ke cloud sama-sama membaca **hub**, mesin sinkronisasi tetap
+wajib berjalan di mode ini — "tidak ada jaringan" bukan alasan melewatkan
+siklusnya, sebab push di sini adalah operasi berkas.
 
 Aturan transport ditegakkan di `normalize_database_url` (`turso.rs`) dan
 dicerminkan di `src/lib/validations/database-endpoint.ts` agar formulir bisa

@@ -267,3 +267,38 @@ tabel empat lapisan di atas, lalu sesuaikan `src/lib/rbac/catalog.ts`,
 `src/lib/auth/access.ts`, gateway, dan pendaftaran perintah di kedua `lib.rs`.
 
 Detail lengkap ada di `README.md`.
+30. Siklus sinkronisasi TIDAK punya loop latar di Rust. Yang menjalankannya
+    hanya `AutoSyncRunner` (12 dtk bila ada antrean, 30 dtk idle, 90 dtk saat
+    jendela tersembunyi), sekali saat login, dan mutasi yang memanggil
+    `sync::synchronize` sendiri. Mutasi bervolume tinggi yang TIDAK memanggilnya
+    wajib memancarkan `requestSyncNow()` dari halamannya — lepas dari alur
+    utama (tanpa `await`) supaya tidak menambah waktu respons.
+31. `AutoSyncRunner` melewatkan siklus ketika `navigator.onLine === false`.
+    Penjagaan itu benar untuk mode cloud, tetapi **SALAH di Mode Database
+    Lokal**: di sana "cloud"-nya berkas hub di perangkat yang sama, jadi push
+    adalah operasi BERKAS, bukan jaringan — dan mesin yang benar-benar terputus
+    justru kasus penggunaan utamanya. Melewatkannya membuat outbox tidak pernah
+    terkuras, hub tertinggal, lalu ekspor cadangan dan promosi ke cloud
+    (keduanya membaca hub) kehilangan data tanpa satu pun pesan error.
+    Benderanya dibawa `DesktopSyncStatus.local_mode` — BUKAN lewat
+    `desktop_get_database_config`, yang menuntut `settings.view` + Superadmin
+    sementara siklus otomatis berjalan untuk SETIAP peran — dan disemai sekali
+    saat mount lewat `getSyncStatus()` supaya siklus PERTAMA pun sudah tahu.
+32. `SENSITIVE_MUTATION_PERMISSIONS` (`src/lib/rbac/catalog.ts`) berisi izin yang
+    SENGAJA tidak ikut paket bawaan role Admin, karena semuanya menghancurkan
+    atau menyerahkan sesuatu yang tidak bisa dibuat ulang:
+    `password_reset.delete` (satu-satunya jejak pemulihan beserta fotonya),
+    `password_reset.approve` (kendali sebuah akun),
+    `two_factor.reset` (lapisan kedua akun orang lain),
+    `database_backup.restore` (SELURUH data perangkat dalam satu langkah),
+    `settings.manage`, dan — dari domain contoh — `items.manage`.
+    Yang terakhir ada di sana sebagai PERAGAAN: saat Anda mengganti domain
+    contoh, izin domain Anda sendiri yang bisa menghapus data wajib ikut
+    didaftarkan di sana, bukan dibiarkan masuk paket Admin secara diam-diam.
+33. `bun run audit:docs` membandingkan DOKUMEN dengan KODE — jumlah rute
+    kanonik, jumlah tabel snapshot, daftar provider, daftar izin sensitif, dan
+    keberadaan setiap berkas yang dirujuk. `audit:schema` dan `audit:contract`
+    hanya membandingkan kode dengan kode, sehingga klaim dokumen yang usang bisa
+    bertahan diam-diam — dan dokumen yang bertentangan dengan kode lebih
+    berbahaya daripada dokumen yang diam, karena ia menuntun orang berikutnya
+    mengulang bug yang sudah diperbaiki.
