@@ -1379,9 +1379,22 @@ impl TursoClient {
                 ('rbac_revision', '1');"#,
                 vec![],
             ),
+            // Riwayat versi WAJIB lengkap, bukan hanya fondasinya.
+            //
+            // `isDatabaseSchemaReady` di `db-schema.ts` menuntut
+            // `version >= CURRENT_SCHEMA_VERSION`. Jalur Web mencatat versi 2
+            // lewat `runDatabaseMigrations`; kalau jalur Rust berhenti di versi
+            // 1, database hasil provisioning dari Desktop/Mobile akan dianggap
+            // SELAMANYA belum siap oleh aplikasi Web — padahal seluruh tabel
+            // yang diwakili versi 2 (pemulihan password dan verifikasi dua
+            // langkah) memang dibuat di berkas ini juga.
+            //
+            // Setiap migrasi baru di `db-migrations.ts` WAJIB ditambahkan di
+            // sini dengan nomor dan nama yang sama persis.
             Statement::new(
                 r#"INSERT OR IGNORE INTO schema_migration (version, name, applied_at) VALUES
-                (1, 'template-foundation-v1', datetime('now'));"#,
+                (1, 'template-foundation-v1', datetime('now')),
+                (2, 'password-reset-and-two-factor', datetime('now'));"#,
                 vec![],
             ),
             // ============ DOMAIN CONTOH — GANTI DENGAN MILIK ANDA ============
@@ -6072,5 +6085,178 @@ mod tests {
         // ...dan pasangan yang tidak terdaftar ditolak, bukan diloloskan.
         assert_eq!(canonical_sync_route("item", "truncate"), None);
         assert_eq!(canonical_sync_route("pelanggan", "create"), None);
+    }
+
+    // ── Mode Database Lokal Murni ──────────────────────────────────────────
+    //
+    // Janji arsitektur ini: SQL yang sama persis yang membangun database cloud
+    // juga membangun berkas lokal. Bukan salinan DDL, bukan skema kedua —
+    // `ensure_schema()` yang sama, hanya dengan transport yang ditukar. Selama
+    // uji-uji di bawah lulus, drift antara tabel lokal dan tabel cloud tidak
+    // mungkin terjadi, karena keduanya lahir dari satu fungsi.
+
+    /// Provisioning mode lokal membangun SELURUH tabel yang dituntut aplikasi.
+    #[test]
+    fn provisioning_lokal_membangun_seluruh_tabel_cloud() {
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .build()
+            .expect("runtime uji");
+        runtime.block_on(async {
+            let dir = tempfile::tempdir().expect("direktori sementara");
+            let hub = dir.path().join("app-hub.db");
+
+            let client = TursoClient::local_file(
+                Url::parse(LOCAL_FILE_ORIGIN).expect("origin lokal"),
+                &hub,
+                Client::new(),
+            );
+            client.ensure_schema().await.expect("provisioning lokal");
+
+            let connection = rusqlite::Connection::open(&hub).expect("buka hub");
+
+            // Daftar ini WAJIB sama dengan `REQUIRED_TABLES` di `db-schema.ts`.
+            // Sengaja dieja ulang: kalau salah satunya berhenti dibuat, jalur
+            // Web akan menganggap database selamanya belum siap — dan tanpa uji
+            // ini, kegagalannya baru terlihat di tangan pengguna.
+            for table in [
+                "app_role",
+                "app_permission",
+                "role_permission",
+                "role_permission_audit",
+                "master_operator",
+                "app_bootstrap_state",
+                "app_session",
+                "auth_login_rate_limit",
+                "password_reset_request",
+                "app_mail_config",
+                "schema_migration",
+                "sync_changelog",
+                "sync_change_log",
+                "sync_operation_receipt",
+                "setting_gex_system",
+                "company_profile",
+                "master_item",
+                "log_aktivitas",
+            ] {
+                let ada: i64 = connection
+                    .query_row(
+                        "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = ?1;",
+                        [table],
+                        |row| row.get(0),
+                    )
+                    .unwrap_or(0);
+                assert_eq!(ada, 1, "tabel '{table}' tidak dibuat oleh ensure_schema()");
+            }
+
+            // Penghitung perubahan per tabel: tanpa ini, setiap siklus tarik
+            // akan menganggap seluruh tabel berpotensi berubah.
+            let pulse: i64 = connection
+                .query_row(
+                    "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'sync_pulse';",
+                    [],
+                    |row| row.get(0),
+                )
+                .unwrap_or(0);
+            assert_eq!(pulse, 1, "sync_pulse tidak dibuat");
+
+            let versi: i64 = connection
+                .query_row(
+                    "SELECT COALESCE(MAX(version), 0) FROM schema_migration WHERE version > 0;",
+                    [],
+                    |row| row.get(0),
+                )
+                .expect("versi skema");
+            assert_eq!(
+                versi,
+                crate::desktop::sync::CLIENT_SCHEMA_VERSION,
+                "versi skema hasil provisioning lokal berbeda dari versi klien"
+            );
+        });
+    }
+
+    /// Katalog permission ikut tertanam, bukan hanya tabelnya.
+    ///
+    /// Database tanpa baris permission membuat setiap pemeriksaan hak akses
+    /// gagal — Superadmin pun tidak bisa membuka apa pun.
+    #[test]
+    fn provisioning_lokal_menanam_role_dan_permission() {
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .build()
+            .expect("runtime uji");
+        runtime.block_on(async {
+            let dir = tempfile::tempdir().expect("direktori sementara");
+            let hub = dir.path().join("app-hub.db");
+
+            let client = TursoClient::local_file(
+                Url::parse(LOCAL_FILE_ORIGIN).expect("origin lokal"),
+                &hub,
+                Client::new(),
+            );
+            client.ensure_schema().await.expect("provisioning lokal");
+
+            let connection = rusqlite::Connection::open(&hub).expect("buka hub");
+            let permissions: i64 = connection
+                .query_row("SELECT COUNT(*) FROM app_permission;", [], |row| row.get(0))
+                .expect("hitung permission");
+            assert!(
+                permissions > 0,
+                "katalog permission kosong: seluruh pemeriksaan hak akses akan gagal"
+            );
+
+            let superadmin: i64 = connection
+                .query_row(
+                    "SELECT COUNT(*) FROM app_role WHERE role_key = 'superadmin';",
+                    [],
+                    |row| row.get(0),
+                )
+                .expect("hitung role");
+            assert_eq!(superadmin, 1, "role superadmin tidak ditanam");
+        });
+    }
+
+    /// Mode lokal tidak punya jaringan, jadi tidak pernah ada token.
+    #[test]
+    fn mode_lokal_tidak_pernah_menuntut_token() {
+        let local = TursoConfig::new(
+            "C:/data/app-hub.db".into(),
+            String::new(),
+            DatabaseProvider::LocalFile,
+            false,
+        );
+        assert!(!local.requires_auth_token());
+
+        let client = TursoClient::from_config(&local, Client::new()).expect("klien lokal");
+        assert!(client.is_local());
+    }
+
+    /// Origin mode lokal adalah konstanta, bukan turunan dari isi path.
+    ///
+    /// Origin dipakai sebagai kunci identitas klien sinkronisasi. Kalau ia ikut
+    /// berubah saat berkas hub dipindahkan, perangkat yang sama akan dianggap
+    /// perangkat baru dan seluruh kursornya kembali ke nol.
+    #[test]
+    fn origin_mode_lokal_stabil_dan_tidak_bergantung_isi_path() {
+        let a = normalize_database_url("C:/data/app-hub.db", DatabaseProvider::LocalFile, false)
+            .expect("origin lokal");
+        let b = normalize_database_url("/home/pengguna/lain.db", DatabaseProvider::LocalFile, false)
+            .expect("origin lokal");
+
+        assert_eq!(a, b);
+        assert_eq!(a.as_str().trim_end_matches('/'), LOCAL_FILE_ORIGIN);
+    }
+
+    /// Lokasi berkas yang kosong adalah kesalahan yang harus TERLIHAT, bukan
+    /// berkas kosong yang diam-diam dibuat di direktori kerja.
+    #[test]
+    fn lokasi_berkas_lokal_wajib_terisi() {
+        let kosong = TursoConfig::new(
+            "   ".into(),
+            String::new(),
+            DatabaseProvider::LocalFile,
+            false,
+        );
+        let error = kosong.local_file_path().expect_err("harus gagal");
+        assert_eq!(error.code, "LOCAL_DB_PATH_MISSING");
+        assert!(TursoClient::from_config(&kosong, Client::new()).is_err());
     }
 }

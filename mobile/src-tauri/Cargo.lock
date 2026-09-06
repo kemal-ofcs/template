@@ -136,6 +136,7 @@ dependencies = [
  "tauri-plugin-android-fs",
  "tauri-plugin-log",
  "tempfile",
+ "tokio",
  "url",
  "webpki-roots 0.26.11",
  "zeroize",

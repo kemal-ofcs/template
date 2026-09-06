@@ -233,6 +233,36 @@ fn resolve_bootstrap_turso_config(
     let token = auth_token.unwrap_or_default().trim().to_owned();
     let stored = state.turso_config();
 
+    // Provider yang tidak dikirim frontend mewarisi pilihan yang sudah tersimpan;
+    // instalasi lama yang belum punya konfigurasi apa pun tetap jatuh ke Turso.
+    //
+    // WAJIB ditentukan SEBELUM alamat kosong ditolak di bawah: Mode Database
+    // Lokal memang tidak punya alamat, dan formulirnya sengaja tidak menampilkan
+    // kolom itu. Memeriksa alamat lebih dulu membuat provisioning perangkat baru
+    // dalam mode lokal selalu berhenti dengan "Alamat database wajib diisi" —
+    // menuntut sesuatu yang tidak pernah bisa diisi pengguna.
+    let requested_provider = provider
+        .or_else(|| stored.as_ref().map(|config| config.provider))
+        .unwrap_or_default();
+
+    if requested_provider.is_local_file() {
+        // Lokasi berkas hub ditentukan di sini persis seperti pada
+        // `set_database_config`, supaya kedua pintu masuk konfigurasi memakai
+        // lokasi bawaan yang sama. Alamat yang dikirim eksplisit tetap
+        // dihormati, agar hub bisa ditaruh di drive lain.
+        let path = if url.is_empty() {
+            state.local_hub_path().to_string_lossy().into_owned()
+        } else {
+            url
+        };
+        return Ok(turso::TursoConfig::new(
+            path,
+            String::new(),
+            turso::DatabaseProvider::LocalFile,
+            false,
+        ));
+    }
+
     if url.is_empty() {
         return stored.ok_or_else(|| {
             CommandError::new(
@@ -242,11 +272,7 @@ fn resolve_bootstrap_turso_config(
         });
     }
 
-    // Provider yang tidak dikirim frontend mewarisi pilihan yang sudah tersimpan;
-    // instalasi lama yang belum punya konfigurasi apa pun tetap jatuh ke Turso.
-    let provider = provider
-        .or_else(|| stored.as_ref().map(|config| config.provider))
-        .unwrap_or_default();
+    let provider = requested_provider;
     let allow_insecure_transport = allow_insecure_transport
         .or_else(|| {
             stored
@@ -1974,4 +2000,72 @@ pub async fn desktop_record_activity(
 
     let _ = sync::synchronize(&state).await;
     Ok(json!({ "sukses": true, "event_key": event_key }))
+}
+
+#[cfg(test)]
+mod tests_provisioning {
+    use super::*;
+
+    fn state_uji(directory: &std::path::Path) -> MobileState {
+        storage::initialize(directory).expect("skema lokal");
+        MobileState {
+            server_origin: std::sync::RwLock::new(
+                crate::mobile::app_identity::DEFAULT_SERVER_ORIGIN.to_owned(),
+            ),
+            offline_max_age_hours: 24,
+            data_dir: directory.to_path_buf(),
+            http: reqwest::Client::new(),
+            turso_config: std::sync::RwLock::new(None),
+            session: std::sync::Mutex::new(None),
+            vault_lock: std::sync::Mutex::new(()),
+        }
+    }
+
+    /// Regresi: provisioning Mode Database Lokal pernah berhenti dengan
+    /// "Alamat database wajib diisi" pada perangkat baru.
+    ///
+    /// Formulirnya memang tidak menampilkan kolom alamat — mode lokal tidak
+    /// punya alamat — sehingga frontend mengirim string kosong. Versi
+    /// sebelumnya memeriksa alamat SEBELUM melihat provider, jadi pengguna
+    /// diminta mengisi sesuatu yang tidak pernah bisa diisi.
+    #[test]
+    fn mode_lokal_tidak_menuntut_alamat_saat_provisioning() {
+        let directory = tempfile::tempdir().expect("direktori sementara");
+        let state = state_uji(directory.path());
+
+        let config = resolve_bootstrap_turso_config(
+            &state,
+            Some(String::new()),
+            Some(String::new()),
+            Some(turso::DatabaseProvider::LocalFile),
+            Some(false),
+        )
+        .expect("mode lokal harus diterima tanpa alamat");
+
+        assert!(config.provider.is_local_file());
+        assert!(!config.requires_auth_token());
+        assert_eq!(
+            config.local_file_path().expect("lokasi hub"),
+            state.local_hub_path(),
+            "lokasi hub bawaan harus sama dengan yang dipakai set_database_config"
+        );
+    }
+
+    /// Provider selain lokal TETAP menuntut alamat: perangkat yang belum
+    /// dikonfigurasi tidak punya database untuk diperiksa.
+    #[test]
+    fn provider_remote_tetap_menuntut_alamat() {
+        let directory = tempfile::tempdir().expect("direktori sementara");
+        let state = state_uji(directory.path());
+
+        let error = resolve_bootstrap_turso_config(
+            &state,
+            Some(String::new()),
+            None,
+            Some(turso::DatabaseProvider::Turso),
+            None,
+        )
+        .expect_err("Turso tanpa alamat harus ditolak");
+        assert_eq!(error.code, "TURSO_NOT_CONFIGURED");
+    }
 }
