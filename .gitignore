@@ -1,0 +1,20 @@
+node_modules/
+.next/
+out/
+dist/
+*.tsbuildinfo
+
+# Rust
+target/
+src-tauri/gen/schemas/
+
+# Database lokal
+*.db
+*.db-wal
+*.db-shm
+
+# Environment
+.env*
+!.env.example
+
+.DS_Store

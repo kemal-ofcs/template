@@ -1,0 +1,57 @@
+[package]
+name = "app_template_mobile"
+version = "0.1.0"
+description = "SPPG Attendance Mobile App"
+authors = ["SPPG Team"]
+edition = "2021"
+rust-version = "1.77.2"
+
+[lib]
+name = "app_template_mobile_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2.6.3", features = [] }
+dotenvy = "0.15.7"
+
+[dependencies]
+serde_json = "1.0"
+serde = { version = "1.0", features = ["derive"] }
+log = "0.4"
+tauri = { version = "2.11.3", features = [] }
+tauri-plugin-log = "2"
+reqwest = { version = "0.13.4", default-features = false, features = ["json", "rustls", "gzip", "brotli", "deflate"] }
+rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
+webpki-roots = "0.26"
+rusqlite = { version = "0.40.2", features = ["bundled"] }
+sha2 = "0.10.9"
+# TOTP memakai SHA-1 (RFC 6238). Bukan pilihan gaya: Google Authenticator
+# mengabaikan parameter algorithm pada URI otpauth dan selalu memakai SHA-1,
+# sehingga SHA-256 akan menghasilkan kode yang tidak pernah cocok.
+sha1 = "0.10"
+hex = "0.4.3"
+url = "2.5.7"
+zeroize = "1.8.2"
+aes-gcm = "0.10.3"
+argon2 = "0.5.3"
+rand_core = { version = "0.6.4", features = ["getrandom"] }
+base64 = "0.22"
+pbkdf2 = { version = "0.12", default-features = false, features = ["hmac"] }
+hmac = "0.12"
+rust_decimal = { version = "1.36", features = ["serde-with-str", "maths"] }
+
+[dev-dependencies]
+tempfile = "3.23.0"
+
+[profile.dev.package.argon2]
+opt-level = 3
+
+[profile.release]
+opt-level = "z"
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true
+
+[target.'cfg(target_os = "android")'.dependencies]
+tauri-plugin-android-fs = "29.0.0"

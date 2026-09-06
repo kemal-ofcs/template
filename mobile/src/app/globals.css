@@ -1,0 +1,169 @@
+@import "tailwindcss";
+
+:root {
+  color-scheme: dark;
+  --app-background: #030712;
+  --app-background-soft: #0b1329;
+  --app-surface: rgba(15, 23, 42, 0.85);
+  --app-surface-raised: rgba(30, 41, 59, 0.75);
+  --app-border: rgba(255, 255, 255, 0.12);
+  --app-primary: #38bdf8;
+  --app-primary-strong: #0284c7;
+  --app-text: #f8fafc;
+  --app-text-muted: #94a3b8;
+  font-family:
+    Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
+    "Segoe UI", Roboto, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
+}
+
+html {
+  min-width: 320px;
+  min-height: 100%;
+  background: var(--app-background);
+  touch-action: manipulation;
+  /* Safe area handling */
+  padding-top: env(safe-area-inset-top);
+  padding-right: env(safe-area-inset-right);
+  padding-bottom: env(safe-area-inset-bottom);
+  padding-left: env(safe-area-inset-left);
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100dvh;
+  background:
+    radial-gradient(circle at 50% 0%, rgb(56 189 248 / 15%), transparent 28rem),
+    radial-gradient(
+      circle at 100% 100%,
+      rgb(59 130 246 / 10%),
+      transparent 24rem
+    ),
+    linear-gradient(180deg, var(--app-background-soft), var(--app-background));
+  color: var(--app-text);
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* Allow text selection in inputs and code */
+input,
+textarea,
+select,
+code,
+pre {
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+::selection {
+  background: rgb(56 189 248 / 32%);
+  color: white;
+}
+
+.mobile-safe-bottom {
+  padding-bottom: max(0.5rem, env(safe-area-inset-bottom));
+}
+
+.mobile-safe-top {
+  padding-top: max(0.5rem, env(safe-area-inset-top));
+}
+
+/* Custom smooth scrollbar */
+::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+/* ==========================================================================
+   Kode pemulihan pada mode terang
+
+   Basis JSX-nya SELALU gelap (aturan tema repo ini). Teks aksen terang seperti
+   `text-amber-100` menjadi nyaris tak terbaca di atas latar terang, jadi ia
+   dibalik ke nada pekat berkontras tinggi di sini — bukan dengan menambah
+   kelas light di JSX. Kelas semantiknya (`.bootstrap-recovery-*`,
+   `.recovery-code-pill`) ada khusus supaya pembalikan ini punya sasaran yang
+   stabil; jangan menggantinya dengan pemilih utilitas.
+   ========================================================================== */
+html[data-theme="light"] .bootstrap-recovery-eyebrow,
+html.light .bootstrap-recovery-eyebrow {
+  color: #b45309 !important;
+}
+
+html[data-theme="light"] .bootstrap-recovery-title,
+html.light .bootstrap-recovery-title {
+  color: #0f172a !important;
+}
+
+html[data-theme="light"] .bootstrap-recovery-desc,
+html.light .bootstrap-recovery-desc {
+  color: #475569 !important;
+}
+
+html[data-theme="light"] .bootstrap-recovery-code,
+html.light .bootstrap-recovery-code,
+html[data-theme="light"] .recovery-code-pill,
+html.light .recovery-code-pill {
+  border: 1px solid #fcd34d !important;
+  background-color: #fffbeb !important;
+  color: #78350f !important;
+  box-shadow: 0 1px 2px rgb(180 83 9 / 5%) !important;
+}
+
+html[data-theme="light"] .bootstrap-recovery-warning,
+html.light .bootstrap-recovery-warning {
+  border-color: #fecdd3 !important;
+  background-color: #fff1f2 !important;
+  color: #be123c !important;
+}
+
+html[data-theme="light"] .bootstrap-recovery-submit,
+html.light .bootstrap-recovery-submit {
+  background-color: #f59e0b !important;
+  color: #0f172a !important;
+}
+
+html[data-theme="light"] .bootstrap-recovery-submit:hover,
+html.light .bootstrap-recovery-submit:hover {
+  background-color: #d97706 !important;
+  color: #fff !important;
+}
+
+html[data-theme="light"] .recovery-code-btn,
+html.light .recovery-code-btn {
+  border: 1px solid #cbd5e1 !important;
+  background-color: #f1f5f9 !important;
+  color: #1e293b !important;
+}
+
+html[data-theme="light"] .recovery-code-btn:hover,
+html.light .recovery-code-btn:hover {
+  background-color: #e2e8f0 !important;
+  color: #0f172a !important;
+}
